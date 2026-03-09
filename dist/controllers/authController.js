@@ -139,12 +139,32 @@ const driverApply = async (req, res) => {
     try {
         const userRepository = data_source_1.AppDataSource.getRepository(User_1.User);
         const { phone, name, vehicle, licenseNumber, kycLicenseUrl, kycIdUrl } = req.body;
+        console.log(`[DRIVE-APPLY] Received application for ${phone}`, { name, vehicle });
+        if (!phone || !name || !vehicle) {
+            return res.status(400).json({ success: false, message: 'Missing mandatory fields: phone, name, and vehicle are required.' });
+        }
         let user = await userRepository.findOne({ where: { phone } });
         if (user) {
-            if (user.role === 'driver' || user.role === 'partner') {
-                return res.status(400).json({ success: false, message: 'This phone number is already registered.' });
+            if (user.role === 'driver') {
+                if (user.status === 'pending') {
+                    // UPDATE pending application instead of blocking
+                    user.name = name || user.name;
+                    user.vehicle = vehicle;
+                    user.licenseNumber = licenseNumber || '';
+                    user.kycLicenseUrl = kycLicenseUrl || null;
+                    user.kycIdUrl = kycIdUrl || null;
+                    await userRepository.save(user);
+                    return res.status(200).json({ success: true, message: 'Application details updated! Still awaiting approval.' });
+                }
+                if (user.status === 'rejected') {
+                    return res.status(400).json({ success: false, message: 'Your previous application was rejected. Please contact support to re-apply.' });
+                }
+                return res.status(400).json({ success: false, message: 'This phone number is already registered as a driver. Try logging in instead.' });
             }
-            // If customer, upgrade them to driver application
+            if (user.role === 'partner') {
+                return res.status(400).json({ success: false, message: 'This phone number is registered to a partner account. Business accounts cannot be drivers currently.' });
+            }
+            // Upgrade existing customer to driver applicant
             user.name = name || user.name;
             user.role = 'driver';
             user.vehicle = vehicle;
@@ -171,6 +191,7 @@ const driverApply = async (req, res) => {
         res.status(201).json({ success: true, message: 'Application submitted! Awaiting admin approval.' });
     }
     catch (error) {
+        console.error('[DRIVE-APPLY ERROR]', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };

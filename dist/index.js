@@ -65,6 +65,7 @@ const uploadRoutes_1 = __importDefault(require("./routes/uploadRoutes"));
 const groupOrderRoutes_1 = __importDefault(require("./routes/groupOrderRoutes"));
 const vendorRoutes_1 = __importDefault(require("./routes/vendorRoutes"));
 const marketingRoutes_1 = __importDefault(require("./routes/marketingRoutes"));
+const ticketRoutes_1 = __importDefault(require("./routes/ticketRoutes"));
 // Service Imports
 const dispatcherService_1 = require("./services/dispatcherService");
 dotenv.config({ path: '.env' });
@@ -160,6 +161,7 @@ app.use('/api/system', systemRoutes_1.default);
 app.use('/api/upload', uploadRoutes_1.default);
 app.use('/api/vendors', vendorRoutes_1.default);
 app.use('/api/marketing', marketingRoutes_1.default);
+app.use('/api/tickets', ticketRoutes_1.default);
 // ── Global Error Handler ─────────────────────────────────────────────
 app.use((err, req, res, next) => {
     console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
@@ -180,6 +182,16 @@ io.on('connection', (socket) => {
     socket.on('join_group_room', (groupId) => {
         socket.join(`group_${groupId}`);
         console.log(`Socket ${socket.id} joined group room: group_${groupId}`);
+    });
+    socket.on('send_message', (data) => {
+        console.log(`Message from ${data.sender} in room ${data.orderId}: ${data.text}`);
+        // Broadcast to everyone in the room except the sender
+        socket.to(data.orderId).emit('new_message', {
+            id: (0, uuid_1.v4)(),
+            text: data.text,
+            sender: 'other',
+            timestamp: new Date().toISOString()
+        });
     });
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
